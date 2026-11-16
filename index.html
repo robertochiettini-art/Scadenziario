@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Scadenzario di casa</title>
+<style>
+:root{--bg:#f3f6f5;--surface:#ffffff;--ink:#14302c;--muted:#5d7571;--line:#d5e0dd;--accent:#0f6b5c;--accent-ink:#ffffff;--warn:#c76a00;--late:#b3261e;--ok:#0f6b5c;
+box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){color-scheme:dark;--bg:#0f1c1a;--surface:#182927;--ink:#e6f1ee;--muted:#93aba6;--line:#2a403d;--accent:#4cc9b0;--accent-ink:#06201b;--warn:#ffa94d;--late:#ff7b72;--ok:#4cc9b0}}
+:root[data-theme="dark"]{color-scheme:dark;--bg:#0f1c1a;--surface:#182927;--ink:#e6f1ee;--muted:#93aba6;--line:#2a403d;--accent:#4cc9b0;--accent-ink:#06201b;--warn:#ffa94d;--late:#ff7b72;--ok:#4cc9b0}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+main{max-width:560px;margin:0 auto;padding:20px 16px 48px}
+h1{font-size:1.7rem;margin:8px 0 2px;letter-spacing:-.02em}
+.sub{color:var(--muted);margin:0 0 18px}
+.sum{display:flex;gap:10px;margin-bottom:18px}
+.sum div{flex:1;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:12px}
+.sum b{display:block;font-size:1.5rem;line-height:1.1}
+.sum span{color:var(--muted);font-size:.85rem}
+form{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:14px;display:grid;gap:10px;margin-bottom:22px}
+label{display:grid;gap:4px;font-size:.88rem;color:var(--muted)}
+input,select{font:inherit;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:10px;width:100%}
+.row{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.chk{display:flex;align-items:center;gap:8px;color:var(--ink)}
+.chk input{width:auto}
+button{font:inherit;cursor:pointer;border-radius:8px;border:1px solid var(--line);background:var(--surface);color:var(--ink);padding:8px 12px}
+button.main{background:var(--accent);color:var(--accent-ink);border-color:var(--accent);font-weight:600;padding:12px}
+:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+ul{list-style:none;margin:0;padding:0;display:grid;gap:10px}
+li{background:var(--surface);border:1px solid var(--line);border-left-width:6px;border-radius:12px;padding:12px;display:grid;grid-template-columns:1fr auto;gap:6px 12px;align-items:center}
+li.late{border-left-color:var(--late)}li.soon{border-left-color:var(--warn)}li.ok{border-left-color:var(--ok)}
+.name{font-weight:600}
+.meta{color:var(--muted);font-size:.85rem}
+.days{text-align:right;font-weight:700}
+li.late .days{color:var(--late)}li.soon .days{color:var(--warn)}
+.act{grid-column:1/-1;display:flex;gap:8px;flex-wrap:wrap}
+a.btn{font:inherit;border-radius:8px;border:1px solid var(--line);background:var(--surface);color:var(--ink);padding:8px 12px;text-decoration:none}
+.empty{text-align:center;color:var(--muted);padding:28px 8px;border:1px dashed var(--line);border-radius:12px}
+</style>
+</head>
+<body>
+<main>
+<h1>Scadenzario di casa</h1>
+<p class="sub">Bollo, assicurazioni, garanzie, contratti: tutto in un posto.</p>
+
+<div class="sum">
+<div><b id="nSoon">0</b><span>entro 30 giorni</span></div>
+<div><b id="nLate">0</b><span>scadute</span></div>
+<div><b id="tot">0 €</b><span>da pagare in 12 mesi</span></div>
+</div>
+
+<form id="f">
+<label>Cosa scade?<input id="nome" required placeholder="Es. Bollo auto, assicurazione casa"></label>
+<div class="row">
+<label>Data di scadenza<input id="data" type="date" required></label>
+<label>Importo (€, facoltativo)<input id="imp" type="number" min="0" step="0.01" inputmode="decimal"></label>
+</div>
+<label>Categoria
+<select id="cat"><option>Auto</option><option>Casa</option><option>Assicurazioni</option><option>Garanzie</option><option>Contratti luce e gas</option><option>Salute</option><option>Altro</option></select>
+</label>
+<label class="chk"><input id="ann" type="checkbox" checked> Si ripete ogni anno</label>
+<button class="main" type="submit">Aggiungi scadenza</button>
+</form>
+
+<ul id="list"></ul>
+</main>
+
+<script>
+(function(){
+var KEY='scadenzario-v1', items=[];
+function load(){try{items=JSON.parse(localStorage.getItem(KEY)||'[]')}catch(e){items=[]}}
+function save(){try{localStorage.setItem(KEY,JSON.stringify(items))}catch(e){}}
+function today(){var d=new Date();d.setHours(0,0,0,0);return d}
+function days(s){return Math.round((new Date(s+'T00:00:00')-today())/864e5)}
+function fmt(s){return new Date(s+'T00:00:00').toLocaleDateString('it-IT',{day:'numeric',month:'long',year:'numeric'})}
+function eur(n){return n.toLocaleString('it-IT',{maximumFractionDigits:0})+' €'}
+function addYear(s){var d=new Date(s+'T00:00:00');d.setFullYear(d.getFullYear()+1);var m=d.getMonth()+1,g=d.getDate();return d.getFullYear()+'-'+(m<10?'0':'')+m+'-'+(g<10?'0':'')+g}
+function label(n){if(n<0)return 'Scaduta da '+(-n)+(n==-1?' giorno':' giorni');if(n===0)return 'Scade oggi';if(n===1)return 'Scade domani';return 'Tra '+n+' giorni'}
+function pad(n){return n<10?'0'+n:''+n}
+function ymd(s,plus){var d=new Date(s+'T00:00:00');d.setDate(d.getDate()+(plus||0));return d.getFullYear()+pad(d.getMonth()+1)+pad(d.getDate())}
+function esc(t){return String(t).replace(/\\/g,'\\\\').replace(/;/g,'\\;').replace(/,/g,'\\,').replace(/\n/g,'\\n')}
+function alarm(trig,txt){return ['BEGIN:VALARM','ACTION:DISPLAY','DESCRIPTION:'+esc(txt),'TRIGGER:'+trig,'END:VALARM']}
+function toCal(it){
+ var stamp=new Date().toISOString().replace(/[-:]/g,'').replace(/\.\d+/,'');
+ var t='Promemoria: '+it.nome;
+ var L=['BEGIN:VCALENDAR','VERSION:2.0','PRODID:-//Scadenzario di casa//IT','BEGIN:VEVENT','UID:'+Date.now()+Math.random().toString(36).slice(2)+'@scadenzario','DTSTAMP:'+stamp,'DTSTART;VALUE=DATE:'+ymd(it.data),'DTEND;VALUE=DATE:'+ymd(it.data,1),'SUMMARY:'+esc('Scadenza: '+it.nome),'DESCRIPTION:'+esc(it.cat+(it.imp?' - '+it.imp+' euro':''))];
+ if(it.ann)L.push('RRULE:FREQ=YEARLY');
+ L=L.concat(alarm('-P6DT15H',t+' (scade tra 7 giorni)'),alarm('-PT15H',t+' (scade domani)'),['END:VEVENT','END:VCALENDAR']);
+ var blob=new Blob([L.join('\r\n')],{type:'text/calendar'});
+ var a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=it.nome.replace(/[^\w]+/g,'-')+'.ics';
+ document.body.appendChild(a);a.click();a.remove();
+}
+function render(){
+ items.sort(function(a,b){return a.data<b.data?-1:1});
+ var ul=document.getElementById('list');ul.innerHTML='';
+ var soon=0,late=0,tot=0;
+ if(!items.length){ul.innerHTML='<li class="empty" style="display:block;border-left-width:1px">Nessuna scadenza. Aggiungi la prima qui sopra.</li>'}
+ items.forEach(function(it){
+  var n=days(it.data),cls=n<0?'late':n<=30?'soon':'ok';
+  if(n<0)late++;else if(n<=30)soon++;
+  if(it.imp&&n<=365)tot+=Number(it.imp);
+  var li=document.createElement('li');li.className=cls;
+  var a=document.createElement('div');
+  var nm=document.createElement('div');nm.className='name';nm.textContent=it.nome;
+  var mt=document.createElement('div');mt.className='meta';mt.textContent=it.cat+' · '+fmt(it.data)+(it.imp?' · '+eur(Number(it.imp)):'')+(it.ann?' · ogni anno':'');
+  a.appendChild(nm);a.appendChild(mt);
+  var d=document.createElement('div');d.className='days';d.textContent=label(n);
+  var act=document.createElement('div');act.className='act';
+  var ok=document.createElement('button');ok.textContent=it.ann?'Fatto, rinnova':'Fatto';
+  ok.onclick=function(){if(it.ann){it.data=addYear(it.data)}else{items=items.filter(function(x){return x!==it})}save();render()};
+  var del=document.createElement('button');del.textContent='Elimina';
+  del.onclick=function(){if(confirm('Eliminare «'+it.nome+'»?')){items=items.filter(function(x){return x!==it});save();render()}};
+  var cal=document.createElement('button');cal.textContent='Aggiungi al calendario';
+  cal.onclick=function(){toCal(it)};
+  act.appendChild(cal);act.appendChild(ok);act.appendChild(del);
+  li.appendChild(a);li.appendChild(d);li.appendChild(act);ul.appendChild(li);
+ });
+ document.getElementById('nSoon').textContent=soon;
+ document.getElementById('nLate').textContent=late;
+ document.getElementById('tot').textContent=eur(tot);
+}
+document.getElementById('f').addEventListener('submit',function(e){
+ e.preventDefault();
+ items.push({nome:nome.value.trim(),data:data.value,imp:imp.value,cat:cat.value,ann:ann.checked});
+ save();e.target.reset();ann.checked=true;render();
+});
+load();render();
+})();
+</script>
+</body>
+</html>
