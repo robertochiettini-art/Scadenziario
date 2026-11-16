@@ -61,7 +61,7 @@ a.btn{font:inherit;border-radius:8px;border:1px solid var(--line);background:var
 <select id="cat"><option>Auto</option><option>Casa</option><option>Assicurazioni</option><option>Garanzie</option><option>Contratti luce e gas</option><option>Salute</option><option>Altro</option></select>
 </label>
 <label class="chk"><input id="ann" type="checkbox" checked> Si ripete ogni anno</label>
-<button class="main" type="submit">Aggiungi scadenza</button>
+<button class="main" id="sub" type="submit">Aggiungi scadenza</button>
 </form>
 
 <ul id="list"></ul>
@@ -69,8 +69,9 @@ a.btn{font:inherit;border-radius:8px;border:1px solid var(--line);background:var
 
 <script>
 (function(){
-var KEY='scadenzario-v1', items=[];
-function load(){try{items=JSON.parse(localStorage.getItem(KEY)||'[]')}catch(e){items=[]}}
+var KEY='scadenzario-v1', items=[], editId=null;
+function newId(){return Date.now().toString(36)+Math.random().toString(36).slice(2,6)}
+function load(){try{items=JSON.parse(localStorage.getItem(KEY)||'[]')}catch(e){items=[]}items.forEach(function(it){if(!it.id)it.id=newId()})}
 function save(){try{localStorage.setItem(KEY,JSON.stringify(items))}catch(e){}}
 function today(){var d=new Date();d.setHours(0,0,0,0);return d}
 function days(s){return Math.round((new Date(s+'T00:00:00')-today())/864e5)}
@@ -85,7 +86,7 @@ function alarm(trig,txt){return ['BEGIN:VALARM','ACTION:DISPLAY','DESCRIPTION:'+
 function toCal(it){
  var stamp=new Date().toISOString().replace(/[-:]/g,'').replace(/\.\d+/,'');
  var t='Promemoria: '+it.nome;
- var L=['BEGIN:VCALENDAR','VERSION:2.0','PRODID:-//Scadenzario di casa//IT','BEGIN:VEVENT','UID:'+Date.now()+Math.random().toString(36).slice(2)+'@scadenzario','DTSTAMP:'+stamp,'DTSTART;VALUE=DATE:'+ymd(it.data),'DTEND;VALUE=DATE:'+ymd(it.data,1),'SUMMARY:'+esc('Scadenza: '+it.nome),'DESCRIPTION:'+esc(it.cat+(it.imp?' - '+it.imp+' euro':''))];
+ var L=['BEGIN:VCALENDAR','VERSION:2.0','PRODID:-//Scadenzario di casa//IT','BEGIN:VEVENT','UID:'+it.id+'@scadenzario','SEQUENCE:'+(it.v||0),'DTSTAMP:'+stamp,'DTSTART;VALUE=DATE:'+ymd(it.data),'DTEND;VALUE=DATE:'+ymd(it.data,1),'SUMMARY:'+esc('Scadenza: '+it.nome),'DESCRIPTION:'+esc(it.cat+(it.imp?' - '+it.imp+' euro':''))];
  if(it.ann)L.push('RRULE:FREQ=YEARLY');
  L=L.concat(alarm('-P6DT15H',t+' (scade tra 7 giorni)'),alarm('-PT15H',t+' (scade domani)'),['END:VEVENT','END:VCALENDAR']);
  var blob=new Blob([L.join('\r\n')],{type:'text/calendar'});
@@ -111,10 +112,12 @@ function render(){
   var ok=document.createElement('button');ok.textContent=it.ann?'Fatto, rinnova':'Fatto';
   ok.onclick=function(){if(it.ann){it.data=addYear(it.data)}else{items=items.filter(function(x){return x!==it})}save();render()};
   var del=document.createElement('button');del.textContent='Elimina';
-  del.onclick=function(){if(confirm('Eliminare «'+it.nome+'»?')){items=items.filter(function(x){return x!==it});save();render()}};
+  del.onclick=function(){if(confirm('Eliminare «'+it.nome+'»?\nSe l’avevi aggiunta al calendario, dovrai eliminarla anche lì.')){items=items.filter(function(x){return x!==it});save();render()}};
   var cal=document.createElement('button');cal.textContent='Aggiungi al calendario';
   cal.onclick=function(){toCal(it)};
-  act.appendChild(cal);act.appendChild(ok);act.appendChild(del);
+  var mod=document.createElement('button');mod.textContent='Modifica';
+  mod.onclick=function(){editId=it.id;nome.value=it.nome;data.value=it.data;imp.value=it.imp||'';cat.value=it.cat;ann.checked=!!it.ann;document.getElementById('sub').textContent='Salva modifiche';window.scrollTo({top:0,behavior:'smooth'});nome.focus()};
+  act.appendChild(mod);act.appendChild(cal);act.appendChild(ok);act.appendChild(del);
   li.appendChild(a);li.appendChild(d);li.appendChild(act);ul.appendChild(li);
  });
  document.getElementById('nSoon').textContent=soon;
@@ -123,8 +126,10 @@ function render(){
 }
 document.getElementById('f').addEventListener('submit',function(e){
  e.preventDefault();
- items.push({nome:nome.value.trim(),data:data.value,imp:imp.value,cat:cat.value,ann:ann.checked});
- save();e.target.reset();ann.checked=true;render();
+ var cur=editId?items.filter(function(x){return x.id===editId})[0]:null;
+ if(cur){cur.nome=nome.value.trim();cur.data=data.value;cur.imp=imp.value;cur.cat=cat.value;cur.ann=ann.checked;cur.v=(cur.v||0)+1;editId=null}
+ else items.push({id:newId(),nome:nome.value.trim(),data:data.value,imp:imp.value,cat:cat.value,ann:ann.checked});
+ save();e.target.reset();ann.checked=true;document.getElementById('sub').textContent='Aggiungi scadenza';render();
 });
 load();render();
 })();
